@@ -1,6 +1,55 @@
 const request = require("supertest");
-const app = require("./index");
 const StellarSdk = require("@stellar/stellar-sdk");
+
+// Mock StellarAuthService to avoid real network calls
+const mockChallenges = new Map();
+jest.mock("./services/stellarAuthService", () => {
+  return class StellarAuthService {
+    constructor() {
+      this.challenges = mockChallenges;
+    }
+    generateNonce() {
+      return require("crypto").randomBytes(32).toString("hex");
+    }
+    async generateChallenge(publicKey) {
+      const nonce = this.generateNonce();
+      this.challenges.set(publicKey, {
+        nonce,
+        transactionHash: "mock-hash",
+        timestamp: Date.now(),
+        used: false,
+      });
+      return {
+        success: true,
+        challenge: "mock-challenge-xdr",
+        nonce,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      };
+    }
+    async verifyChallenge(challengeXDR, publicKey) {
+      if (challengeXDR === "invalid-xdr") {
+        return { success: false, error: "Invalid challenge XDR" };
+      }
+      return { success: true, publicKey };
+    }
+    getChallengeStatus(publicKey) {
+      const challenge = this.challenges.get(publicKey);
+      if (!challenge) return { exists: false };
+      return { exists: true, timestamp: challenge.timestamp, used: challenge.used };
+    }
+  };
+});
+
+const { createApp } = require("./index");
+
+const app = createApp({
+  config: {
+    database: { filename: ':memory:' },
+    cdn: { baseUrl: '', tokenSecret: 'test', tokenTtlSeconds: 300, issuer: 'test', audience: 'test' },
+    auth: { creatorJwtSecret: 'test', issuer: 'test', audience: 'test' },
+    soroban: { rpcUrl: '', networkPassphrase: 'Test SDF Network ; September 2015', contractId: 'CAOUX2FZ65IDC4F2X7LJJ2SVF23A35CCTZB7KVVN475JCLKTTU4CEY6L', sourceSecret: '', method: 'has_active_subscription', argumentMapping: '' },
+  },
+});
 
 describe("Stellar Authentication (SIWS)", () => {
   let testKeypair;

@@ -31,7 +31,7 @@ router.get('/stellar/challenge', async (req, res) => {
 
     // Validate public key format
     try {
-      const { StellarSdk } = require('@stellar/stellar-sdk');
+      const StellarSdk = require('@stellar/stellar-sdk');
       StellarSdk.Keypair.fromPublicKey(publicKey);
     } catch (error) {
       return res.status(400).json({
